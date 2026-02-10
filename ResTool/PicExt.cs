@@ -1,0 +1,51 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
+using System.Text;
+
+namespace ResTool
+{
+    public class PicExt
+    {
+        public void DecodeExt(string inFile, string outFile)
+        {
+            using (FileStream fs = new FileStream(inFile, FileMode.Open, FileAccess.Read))
+            using (BinaryReader br = new BinaryReader(fs))
+            {
+                string magic = Encoding.ASCII.GetString(br.ReadBytes(4));
+                if (magic != "EXT0") throw new Exception("Not valid EXT0 file");
+
+                br.BaseStream.Position = 0xC;
+                int width = br.ReadInt32();
+                int height = br.ReadInt32();
+                int canvasW = br.ReadInt32();
+                int canvasH = br.ReadInt32();
+                int OffsetX = br.ReadInt32();
+                int OffsetY = br.ReadInt32();
+
+                br.BaseStream.Position = 0x24;
+                byte bpp = br.ReadByte();
+
+                Bitmap bmp = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+                if (bpp == 32)
+                {
+                    br.BaseStream.Position = 0x100;
+                    var rect = new Rectangle(0, 0, width, height);
+                    var bmpData = bmp.LockBits(rect, ImageLockMode.WriteOnly, bmp.PixelFormat);
+                    byte[] pixelData = br.ReadBytes(width * height * 4);
+                    Marshal.Copy(pixelData, 0, bmpData.Scan0, pixelData.Length);
+                    bmp.UnlockBits(bmpData);
+                }
+                else if (bpp == 8)
+                {
+                    throw new NotImplementedException("not Implemente 8bpp");
+                }
+
+                bmp.Save(outFile, ImageFormat.Png);
+                Console.WriteLine($"Convert {Path.GetFileName(inFile)}");
+            }
+        }
+    }
+}
