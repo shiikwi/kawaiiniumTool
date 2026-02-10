@@ -14,8 +14,6 @@ namespace ArcUnpack
         public long Offset;
         public uint Size;
         public uint DecompressSize;
-
-        public string FileName => Encoding.GetEncoding("shift_jis").GetString(FileNameBytes).TrimEnd('\0');
     }
 
     public class PcArcFolderBlock
@@ -29,7 +27,14 @@ namespace ArcUnpack
 
     public class PcArc
     {
-        public void Unpack(string arcPath, string outPath)
+        protected Encoding Encode = Encoding.GetEncoding("UTF-8");
+
+        public PcArc(Encoding enc)
+        {
+            this.Encode = enc;
+        }
+
+        public virtual void Unpack(string arcPath, string outPath)
         {
             using (FileStream fs = new FileStream(arcPath, FileMode.Open, FileAccess.Read))
             using (BinaryReader br = new BinaryReader(fs))
@@ -49,7 +54,7 @@ namespace ArcUnpack
                 {
                     fs.Seek(BlockOffset[i], SeekOrigin.Begin);
                     var folder = new PcArcFolderBlock();
-                    folder.FolderName = ReadNameStr(br);
+                    folder.FolderName = Utils.ReadFolderNameStr(br, Encode);
                     folder.FileCount = br.ReadInt32();
                     folder.IsCompress = br.ReadInt32() == 1;
                     br.ReadInt64(); //Skip padding
@@ -68,19 +73,20 @@ namespace ArcUnpack
                     foreach (var entry in folder.Entries)
                     {
                         br.BaseStream.Position = (long)DataOffset + entry.Offset;
+                        var FileName = Utils.ReadCString(entry.FileNameBytes, Encode);
                         var buffer = br.ReadBytes((int)entry.Size);
                         if (folder.IsCompress)
                             buffer = DecompressGZip(buffer);
-                        string outFile = Path.Combine(outDir, entry.FileName.Replace(".gz", ""));
+                        string outFile = Path.Combine(outDir, FileName.Replace(".gz", ""));
                         File.WriteAllBytes(outFile, buffer);
-                        Console.WriteLine($"Extract {entry.FileName}");
+                        Console.WriteLine($"Extract {FileName}");
                     }
                 }
             }
 
         }
 
-        private T BytesToStruct<T>(BinaryReader br) where T : struct
+        protected T BytesToStruct<T>(BinaryReader br) where T : struct
         {
             byte[] bytes = br.ReadBytes(Marshal.SizeOf(typeof(T)));
             GCHandle handle = GCHandle.Alloc(bytes, GCHandleType.Pinned);
@@ -92,12 +98,6 @@ namespace ArcUnpack
             {
                 handle.Free();
             }
-        }
-
-        private string ReadNameStr(BinaryReader br)
-        {
-            var namebuffer = br.ReadBytes(0x40);
-            return Encoding.GetEncoding("shift_jis").GetString(namebuffer).TrimEnd('\0');
         }
 
         private byte[] DecompressGZip(byte[] data)

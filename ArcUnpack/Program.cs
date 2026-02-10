@@ -9,16 +9,19 @@ namespace ArcUnpack
         static void Main(string[] args)
         {
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-            if (args.Length != 1)
-            {
-                Console.WriteLine($"Usage: ArcUnpack.exe <pcarc_File_Path>");
-                return;
-            }
-
             var inFile = args[0];
+            var ext = Path.GetExtension(inFile);
             var outPath = Path.Combine(Path.GetDirectoryName(inFile)!, Path.GetFileNameWithoutExtension(inFile) + "Unpack");
-            var arc = new PcArc();
-            arc.Unpack(inFile, outPath);
+            if (ext == ".pcarc")
+            {
+                var pc = new PcArc(Encoding.GetEncoding("shift_jis"));
+                pc.Unpack(inFile, outPath);
+            }
+            else if (ext == ".arc")
+            {
+                var arc = new ARCArc(Encoding.GetEncoding("shift_jis"));
+                arc.Unpack(inFile, outPath);
+            }
 
             Console.WriteLine("Unpack Finish.");
             Console.ReadKey();
