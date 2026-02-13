@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Text;
+#pragma warning disable
 
 namespace ResTool
 {
@@ -28,22 +29,49 @@ namespace ResTool
                 br.BaseStream.Position = 0x24;
                 byte bpp = br.ReadByte();
 
-                Bitmap bmp = new Bitmap(width, height, PixelFormat.Format32bppArgb);
                 if (bpp == 32)
                 {
-                    br.BaseStream.Position = 0x100;
-                    var rect = new Rectangle(0, 0, width, height);
-                    var bmpData = bmp.LockBits(rect, ImageLockMode.WriteOnly, bmp.PixelFormat);
-                    byte[] pixelData = br.ReadBytes(width * height * 4);
-                    Marshal.Copy(pixelData, 0, bmpData.Scan0, pixelData.Length);
-                    bmp.UnlockBits(bmpData);
+                    using (Bitmap bmp = new Bitmap(width, height, PixelFormat.Format32bppArgb))
+                    {
+                        br.BaseStream.Position = 0x100;
+                        var rect = new Rectangle(0, 0, width, height);
+                        var bmpData = bmp.LockBits(rect, ImageLockMode.WriteOnly, bmp.PixelFormat);
+                        byte[] pixelData = br.ReadBytes(width * height * 4);
+                        Marshal.Copy(pixelData, 0, bmpData.Scan0, pixelData.Length);
+                        bmp.UnlockBits(bmpData);
+                        bmp.Save(outFile, ImageFormat.Png);
+                    }
                 }
                 else if (bpp == 8)
                 {
-                    throw new NotImplementedException("not Implemente 8bpp");
-                }
+                    using (Bitmap bmp = new Bitmap(width, height, PixelFormat.Format8bppIndexed))
+                    {
+                        br.BaseStream.Position = 0x100;
+                        ColorPalette pal = bmp.Palette;
+                        for (int i = 0; i < 256; i++)
+                        {
+                            byte b = br.ReadByte();
+                            byte g = br.ReadByte();
+                            byte r = br.ReadByte();
+                            byte a = br.ReadByte();
+                            pal.Entries[i] = Color.FromArgb(a, r, g, b);
+                        }
+                        bmp.Palette = pal;
 
-                bmp.Save(outFile, ImageFormat.Png);
+                        br.BaseStream.Position = 0x500;
+                        var rect = new Rectangle(0, 0, width, height);
+                        var bmpData = bmp.LockBits(rect, ImageLockMode.WriteOnly, bmp.PixelFormat);
+                        byte[] pixel = br.ReadBytes(width * height);
+                        IntPtr ptr = bmpData.Scan0;
+                        for (int y = 0; y < height; y++)
+                        {
+                            Marshal.Copy(pixel, y * width, ptr, width);
+                            ptr += bmpData.Stride;
+                        }
+                        bmp.UnlockBits(bmpData);
+                        bmp.Save(outFile, ImageFormat.Png);
+                    }
+                }
                 Console.WriteLine($"Convert {Path.GetFileName(inFile)}");
             }
         }
